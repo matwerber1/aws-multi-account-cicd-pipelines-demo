@@ -1,0 +1,8 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Demo repository used to launch CloudFormation templates
+
+# Simple S3 bucket for demo purposes
+Resources:
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties: {}
