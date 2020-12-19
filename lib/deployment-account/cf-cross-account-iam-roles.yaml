@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 
+  cross-account IAM roles that will be assumed by CodeDeploy from the DevOps account
+
+
+Parameters:
+  
+  # This is the account ID of the DevOps account containing your CI/CD pipeline:
+  DevOpsAccountId:
+    Type: String
+    Default: 111111111111
+
+Resources:
+
+  # This role will be assumed by CodeDeploy in the DevOps account: 
+  CrossAccountCodeDeployRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: devops-crossaccount-codedeploy-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codedeploy.amazonaws.com
+              AWS:
+                - !Sub "arn:aws:iam::${DevOpsAccountId}:root"
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: CodeDeployPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              # This policy allows the CodeDeploy role to fetch objects and decrypt them. 
+              # This would be needed to pull artifacts from the DevOps account S3 bucket. 
+              # The policy has a "*" for resources, but you could scope this down to the 
+              # specific artifact bucket ARN. Remember, you would need two resources, 
+              # one that is just the bucket ARN, and another that is "bucketname/*". This
+              # role also allows other required actions, such as describing CloudFormation stacks:
+              - 
+                Effect: Allow
+                Action: 
+                  - s3:GetObject*
+                  - s3:GetBucket*
+                  - s3:List*
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - cloudformation:*    # CodeDeploy must be able to create/describe stacks... however, what the stack actually can create/modify is dictated by the separate CloudFormationServiceRole
+                Resource: "*"
+              - 
+                # The CodeDeploy action must pass the the CloudFormation role to the CloudFormation service: 
+                Effect: Allow
+                Action: 
+                  - iam:PassRole
+                Resource: !GetAtt CloudFormationServiceRole.Arn
+
+  # When CodeDeploy's integration for CloudFormation is used to launch a CloudFormation stack, 
+  # CodeDeploy must pass a role to the CloudFormation service which dictates what CloudFormation
+  # is allowed to deploy. The complete flow is that CodeDeploy in the DevOps account would first
+  # assume CrossAccountCodeDeployRole, and then that role would be used to pass the role below
+  # to CloudFormation to actually create the stack: 
+  CloudFormationServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: devops-cloudformation-service-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: CloudFormationPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              # The cross-account CodeDeploy role will pass this role to CloudFormation, and thus this
+              # role determines what CloudFormation is allowed to do. Right now, we let CloudFormation
+              # do anything, but you could scope this down as needed:
+              - Effect: Allow
+                Action: 
+                  - "*"
+                Resource: "*"
+
+Outputs:
+  CrossAccountCodeDeployRoleArn:
+    Value: !GetAtt CrossAccountCodeDeployRole.Arn
+
+  CloudFormationServiceRoleArn:
+    Value: !GetAtt CloudFormationServiceRole.Arn

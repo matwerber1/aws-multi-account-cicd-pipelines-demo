@@ -1,0 +1,400 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 
+  Create resources in the DevOps account that are needed to support cross-account CI/CD deployments.
+
+Parameters:
+
+  # We need to know the repository name so we can create a CloudWatch Event that triggers our pipeline when a commit occurs: 
+  CodeCommitRepositoryName:
+    Type: String
+    Default: XXXX
+
+  # This is the name of the pipeline that we will later create:
+  CodePipelineName:
+    Type: String
+    Default: XXXX
+
+  # This is the branch that will trigger our pipeline:
+  CodePipelineBranchName:
+    Type: String
+    Default: XXXXX
+
+  # IAM Role ARN of the CodeDeploy role created in test account that will be assumed by CodePipeline role in DevOps account:
+  TestCrossAccountCodeDeployRoleArn:
+    Type: String
+    Default: XXXXX
+
+  # IAM Role ARN of the CodeDeploy role created in prod account that will be assumed by CodePipeline role in DevOps account:
+  ProdCrossAccountCodeDeployRoleArn:
+    Type: String
+    Default: XXXXX
+
+  # IAM Role ARN of the CodeDeploy role created in prod account that will be assumed by CodePipeline role in DevOps account:
+  TestCrossAccountCloudFormationRoleArn:
+    Type: String
+    Default: XXXXX
+  
+  # IAM Role ARN of the CodeDeploy role created in prod account that will be assumed by CodePipeline role in DevOps account:
+  ProdCrossAccountCloudFormationRoleArn:
+    Type: String
+    Default: XXXXX
+
+Resources:
+
+  # This S3 bucket will be used by CodePipeline to store inputs (e.g. from CodeCommit) and
+  # outputs (e.g. from CodeBuild) in a pipeline. IAM roles in deployment accounts that are
+  # assumed by CodePipeline must also have permission to access this bucket, via the bucket's
+  # Bucket Policy (which is defined as a separate resource):
+  PipelineArtifactBucket:
+    Type: AWS::S3::Bucket
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub "${AWS::AccountId}-codepipeline-devops-artifacts"
+      # Buckets used by CodePipeline that are accessed by other accounts require a KMS customer-managed KMS Key: 
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            KMSMasterKeyID: !GetAtt PipelineArtifactKmsKey.Arn
+            SSEAlgorithm: aws:kms
+
+  PipelineArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PipelineArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+            - s3:GetObject*
+            - s3:GetBucket*
+            - s3:List*
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Ref TestCrossAccountCodeDeployRoleArn
+                - !Ref ProdCrossAccountCodeDeployRoleArn
+            Resource:
+              - !GetAtt PipelineArtifactBucket.Arn
+              - !Sub "${PipelineArtifactBucket.Arn}/*"
+
+  # This KMS key is used to encrypt/decrypt pipeline artifacts in the pipeline bucket. Cross-account IAM 
+  # roles in the test and prod account that are assumed by CodePipeline in the DevOps account (e.g. cross-
+  # account roles for CodeDeploy) must also have permission within the key policy below to call Decrypt and DescribeKey:
+  PipelineArtifactKmsKey:  
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Statement:
+          
+          - 
+            # Administrative permissions for the root user of the devOps account (required): 
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:GenerateDataKey
+              - kms:TagResource
+              - kms:UntagResource
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Resource: "*"
+          - 
+            # CodePipline role needs ability to encrypt/decrypt:
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt CodePipelineServiceRole.Arn
+            Resource: "*"
+          - 
+            # cross-account deployment-related roles in test and prod should only need to decrypt:
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Ref TestCrossAccountCodeDeployRoleArn
+                - !Ref ProdCrossAccountCodeDeployRoleArn
+            Resource: "*"
+
+          
+
+  # This role is assumed by CodePipeline in the DevOps account to perform actions that take place
+  # in the DevOps account (such as triggering CodeBuild or pulling source from CodeCommit). This
+  # IAM role will also assume cross-account roles in the test and prod accounts when needed, such
+  # as for CodeDeploy. This means that this role must have permission to assume the proper roles:
+  CodePipelineServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: devops-codepipeline-service-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                # Allow CodePipeline to use this role:
+                - codepipeline.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+  
+  # These are the policies attached to our CodePipeline role that give it the permissions needed (described above).
+  # Most of these policies are copy-pasted from the default role that CodePipeline creates when you make a new pipeline
+  # in the console:
+  CodePipelineServiceRolePolicies: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: CodePipelineServiceRolePolicy
+      Roles: 
+        - !Ref CodePipelineServiceRole
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          -
+            # Give DevOps pipeline service role permission to to use the KMS key needed to decrypt / encrypt objects in our artifact bucket: 
+            Effect: "Allow"
+            Action:
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+            Resource: 
+              - !GetAtt PipelineArtifactKmsKey.Arn
+          -
+            # Give DevOps pipeline service role permission to assume CodeDeploy roles in our test and prod accounts:
+            Effect: "Allow"
+            Action: "sts:AssumeRole"
+            Resource: 
+              - !Ref TestCrossAccountCodeDeployRoleArn
+              - !Ref ProdCrossAccountCodeDeployRoleArn
+          - 
+            # This allows CodePipeline to pass IAM roles to downstream services to complete pipeline actions. The
+            # conditon key ensures we are only passing to proper downstream services:
+            Effect: "Allow"
+            Action: "iam:PassRole"
+            Resource: "*"
+            Condition:
+              StringEqualsIfExists:
+                "iam:PassedToService":
+                  - cloudformation.amazonaws.com
+                  - elasticbeanstalk.amazonaws.com
+                  - ec2.amazonaws.com
+                  - ecs-tasks.amazonaws.com
+          - 
+            # Give CodePipeline role permission to read from CodeCommit:
+            Effect: "Allow"
+            Action:
+              - "codecommit:CancelUploadArchive"
+              - "codecommit:GetBranch"
+              - "codecommit:GetCommit"
+              - "codecommit:GetRepository"
+              - "codecommit:GetUploadArchiveStatus"
+              - "codecommit:UploadArchive"
+            Resource: "*"
+          - 
+            # Give CodePipeline role permission to execute CodeDeploy actions:
+            Effect: "Allow"
+            Action:
+              - "codedeploy:CreateDeployment"
+              - "codedeploy:GetApplication"
+              - "codedeploy:GetApplicationRevision"
+              - "codedeploy:GetDeployment"
+              - "codedeploy:GetDeploymentConfig"
+              - "codedeploy:RegisterApplicationRevision"
+            Resource: "*"
+          - 
+            # Give CodePipeline permission to use CodeStar connection (if source is outside of CodeCommit):
+            Effect: "Allow"
+            Action:
+              - "codestar-connections:UseConnection"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "elasticbeanstalk:*"
+              - "ec2:*"
+              - "elasticloadbalancing:*"
+              - "autoscaling:*"
+              - "cloudwatch:*"
+              - "s3:*"
+              - "sns:*"
+              - "cloudformation:*"
+              - "rds:*"
+              - "sqs:*"
+              - "ecs:*"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "lambda:InvokeFunction"
+              - "lambda:ListFunctions"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "opsworks:CreateDeployment"
+              - "opsworks:DescribeApps"
+              - "opsworks:DescribeCommands"
+              - "opsworks:DescribeDeployments"
+              - "opsworks:DescribeInstances"
+              - "opsworks:DescribeStacks"
+              - "opsworks:UpdateApp"
+              - "opsworks:UpdateStack"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "cloudformation:CreateStack"
+              - "cloudformation:DeleteStack"
+              - "cloudformation:DescribeStacks"
+              - "cloudformation:UpdateStack"
+              - "cloudformation:CreateChangeSet"
+              - "cloudformation:DeleteChangeSet"
+              - "cloudformation:DescribeChangeSet"
+              - "cloudformation:ExecuteChangeSet"
+              - "cloudformation:SetStackPolicy"
+              - "cloudformation:ValidateTemplate"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "codebuild:BatchGetBuilds"
+              - "codebuild:StartBuild"
+              - "codebuild:BatchGetBuildBatches"
+              - "codebuild:StartBuildBatch"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "devicefarm:ListProjects"
+              - "devicefarm:ListDevicePools"
+              - "devicefarm:GetRun"
+              - "devicefarm:GetUpload"
+              - "devicefarm:CreateUpload"
+              - "devicefarm:ScheduleRun"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "servicecatalog:ListProvisioningArtifacts"
+              - "servicecatalog:CreateProvisioningArtifact"
+              - "servicecatalog:DescribeProvisioningArtifact"
+              - "servicecatalog:DeleteProvisioningArtifact"
+              - "servicecatalog:UpdateProduct"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "cloudformation:ValidateTemplate"
+            Resource: "*"
+          - 
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "ecr:DescribeImages"
+            Resource: "*"
+          -
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "states:DescribeExecution"
+              - "states:DescribeStateMachine"
+              - "states:StartExecution"
+            Resource: "*"
+          -
+            # Other services that CodePipeline will, or may, use (depends on your Pipeline config):
+            Effect: "Allow"
+            Action:
+              - "appconfig:StartDeployment"
+              - "appconfig:StopDeployment"
+              - "appconfig:GetDeployment"
+            Resource: "*"
+
+  # This role is used by CloudWatch Events to trigger our CodePipeline when a commit is made: 
+  AmazonCloudWatchEventRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        -
+          PolicyName: cwe-pipeline-execution
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action: codepipeline:StartPipelineExecution
+                Resource: 
+                  - !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref CodePipelineName ] ]         
+
+  # This CloudWatch Event triggers our pipeline upon a push to the specified branch: 
+  AmazonCloudWatchEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - 'CodeCommit Repository State Change'
+        resources:
+          - !Join [ '', [ 'arn:aws:codecommit:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref CodeCommitRepositoryName ] ]
+        detail:
+          event:
+            - referenceCreated
+            - referenceUpdated
+          referenceType:
+            - branch
+          referenceName:
+            - !Ref CodePipelineBranchName
+      Targets:
+        -
+          Arn: 
+            !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref CodePipelineName ] ]
+          RoleArn: !GetAtt AmazonCloudWatchEventRole.Arn
+          Id: !Sub "codepipeline-${CodeCommitRepositoryName}"
+
+Outputs:
+  
+  PipelineArtifactBucketArn:
+    Value: !GetAtt PipelineArtifactBucket.Arn
+
+  PipelineArtifactBucketName:
+    Value: !Ref PipelineArtifactBucket
+
+  PipelineArtifactKmsKeyArn:
+    Value: !GetAtt PipelineArtifactKmsKey.Arn
+
+  CodePipelineServiceRoleArn:
+    Value: !GetAtt CodePipelineServiceRole.Arn
