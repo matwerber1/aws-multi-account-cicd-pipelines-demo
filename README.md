@@ -18,40 +18,25 @@ I will eventually work on automating more aspects of the deployment process, bet
 
 ## Deployment
 
-1. Install `gettext` to help with generating example template files. If on MacOS, use `brew install gettext`. 
+1. Install `gettext` to help with generating example template files. If on MacOS, use `brew install gettext`. This is used to dynamically insert environment variables from `config.sh` into some of our templatized CLI commands.
 
-1. Make sure your local AWS CLI has been configured with a profile for each of your devops, test, and production accounts. Afterward, export the profile names of each account, and your devops account ID, to your local shell, as we will need this later: 
-
-    ```sh
-    TEST_PROFILE="testProfile"
-    PROD_PROFILE="prodProfile"
-    DEVOPS_PROFILE="devOpsProfile"
-    DEVOPS_ACCOUNT_ID="111222333444"
-    ```
-
-1. Create cross-account IAM roles in your test account by launching the CloudFormation stack below: 
+1. Make sure your local AWS CLI has been configured with a profile for each of your devops, test, and production accounts. Afterward, export the profile names and account IDs of each account: 
 
     ```sh
-    aws cloudformation deploy \
-        --stack-name crossaccount-deployment-roles \
-        --template-file lib/deployment-account/cf-cross-account-iam-roles.yaml \
-        --capabilities CAPABILITY_NAMED_IAM \
-        --profile $TEST_PROFILE \
-        --parameter-overrides \
-            DevOpsAccountId=$DEVOPS_ACCOUNT_ID
+    export DEVOPS_PROFILE="your_devops_profile"
+    export TEST_PROFILE="your_test_profile"
+    export PROD_PROFILE="your_prod_profile"
+
+    export DEVOPS_ACCOUNT_ID="111111111111"
+    export TEST_ACCOUNT_ID="222222222222"
+    export PROD_ACCOUNT_ID="333333333333"
     ```
 
-1. Create cross-account IAM roles in the prod account, as well:
+1. Optionally, edit any other parameters in `config.sh`. These parameters control things such as the name of the IAM roles, pipeline resources, etc. that will be created. 
 
-    ```sh
-    aws cloudformation deploy \
-        --stack-name crossaccount-deployment-roles \
-        --template-file lib/deployment-account/cf-cross-account-iam-roles.yaml \
-        --capabilities CAPABILITY_NAMED_IAM \
-        --profile $PROD_PROFILE \
-        --parameter-overrides \
-            DevOpsAccountId=$DEVOPS_ACCOUNT_ID
-    ```
+1. Run `./deploy.sh`. This single script will create empty CodeCommit repositories attached to their own CI/CD pipelines in the DevOps account, as well as cross-account IAM roles in the test and prod account needed for deployment.
+
+1. The `lib/codecommit-examples` directory contains a folder with source code for each of the demo CI/CD pipelines. Push the code from each folder to its respective CodeCommit repository in your DevOps account and watch as the CI/CD pipeline triggers. 
 
 ## Diagrams & Examples
 

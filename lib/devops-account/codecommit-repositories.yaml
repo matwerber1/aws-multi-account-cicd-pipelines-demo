@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 
+  Create resources in the DevOps account that are needed to support 
+  cross-account CI/CD deployments. These resources will be shared
+  across the pipelines that we create.
+
+Parameters: 
+
+  InfrastructureRepoName:
+    Type: String
+    Default: devops-demo-infrastructure
+
+Resources:
+  # Repository intended to contain a cloudformation template that our infrastructure
+  # CI/CD pipeline will deploy via the CodeDeploy CloudFormation action type: 
+  InfrastructureRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Ref InfrastructureRepoName
+      RepositoryDescription: Contains a cloudformation.yaml template defining infrastructure to be deployed.
+

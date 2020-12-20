@@ -1,7 +1,7 @@
 {
     "pipeline":{
-       "name":"infrastructure_pipeline",
-       "roleArn":"$DEVOPS_PIPELINE_ROLE_ARN",
+       "name":"$DEVOPS_INFRASTRUCTURE_PIPELINE_NAME",
+       "roleArn":"$DEVOPS_PIPELINE_SERVICE_ROLE_ARN",
        "artifactStore":{
           "type":"S3",
           "location":"$DEVOPS_CODFEPIPELINE_BUCKET_NAME",
@@ -54,7 +54,7 @@
                    "configuration":{
                       "ActionMode":"CREATE_UPDATE",
                       "Capabilities":"CAPABILITY_NAMED_IAM,CAPABILITY_IAM",
-                      "RoleArn":"$TEST_CLOUDFORMATION_ROLE",
+                      "RoleArn":"$PROD_CLOUDFORMATION_ROLE",
                       "StackName":"$INFRASTRUCTURE_CLOUDFORMATION_STACK_NAME",
                       "TemplatePath":"SourceArtifact::cloudformation.yaml"
                    },

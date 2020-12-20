@@ -1,23 +1,25 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 
-  Create resources in the DevOps account that are needed to support cross-account CI/CD deployments.
+  Create resources in the DevOps account that are needed to support 
+  cross-account CI/CD deployments. These resources will be shared
+  across the pipelines that we create.
 
 Parameters:
 
   # We need to know the repository name so we can create a CloudWatch Event that triggers our pipeline when a commit occurs: 
-  CodeCommitRepositoryName:
+  InfrastructureRepositoryName:
     Type: String
-    Default: XXXX
+    Default: devops-infrastructure
 
   # This is the name of the pipeline that we will later create:
-  CodePipelineName:
+  InfrastructurePipelineName:
     Type: String
-    Default: XXXX
+    Default: devops-infrastructure-pipeline
 
   # This is the branch that will trigger our pipeline:
   CodePipelineBranchName:
     Type: String
-    Default: XXXXX
+    Default: master
 
   # IAM Role ARN of the CodeDeploy role created in test account that will be assumed by CodePipeline role in DevOps account:
   TestCrossAccountCodeDeployRoleArn:
@@ -39,6 +41,14 @@ Parameters:
     Type: String
     Default: XXXXX
 
+  PipelineServiceRoleName:
+    Type: String
+    Default: devops-codepipeline-service-role
+
+  PipelineArtifactBucketName:
+    Type: String
+    Default: XXXXXX
+
 Resources:
 
   # This S3 bucket will be used by CodePipeline to store inputs (e.g. from CodeCommit) and
@@ -50,7 +60,7 @@ Resources:
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub "${AWS::AccountId}-codepipeline-devops-artifacts"
+      BucketName: !Ref PipelineArtifactBucketName
       # Buckets used by CodePipeline that are accessed by other accounts require a KMS customer-managed KMS Key: 
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -142,7 +152,7 @@ Resources:
   CodePipelineServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: devops-codepipeline-service-role
+      RoleName: !Ref PipelineServiceRoleName
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -357,10 +367,10 @@ Resources:
                 Effect: Allow
                 Action: codepipeline:StartPipelineExecution
                 Resource: 
-                  - !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref CodePipelineName ] ]         
+                  - !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref InfrastructurePipelineName ] ]         
 
   # This CloudWatch Event triggers our pipeline upon a push to the specified branch: 
-  AmazonCloudWatchEventRule:
+  InfrastructurePipelineEventTrigger:
     Type: AWS::Events::Rule
     Properties:
       EventPattern:
@@ -369,7 +379,7 @@ Resources:
         detail-type:
           - 'CodeCommit Repository State Change'
         resources:
-          - !Join [ '', [ 'arn:aws:codecommit:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref CodeCommitRepositoryName ] ]
+          - !Join [ '', [ 'arn:aws:codecommit:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref InfrastructureRepositoryName ] ]
         detail:
           event:
             - referenceCreated
@@ -381,9 +391,9 @@ Resources:
       Targets:
         -
           Arn: 
-            !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref CodePipelineName ] ]
+            !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref InfrastructurePipelineName ] ]
           RoleArn: !GetAtt AmazonCloudWatchEventRole.Arn
-          Id: !Sub "codepipeline-${CodeCommitRepositoryName}"
+          Id: !Sub "codepipeline-${InfrastructureRepositoryName}"
 
 Outputs:
   
