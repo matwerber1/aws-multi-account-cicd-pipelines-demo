@@ -28,10 +28,6 @@ createDevOpsPipeline() {
         --profile $DEVOPS_PROFILE
 }
 
-createDevOpsPipeline "lib/devops-account/pipeline-definitions/infrastructure-pipeline/pipeline-definition-template.json"
-
-exit;
-
 # Create our CodeCommit repositories:
 aws cloudformation deploy \
     --stack-name devops-codecommit-repos \
@@ -93,4 +89,4 @@ export DEVOPS_PIPELINE_SERVICE_ROLE_ARN=$(getCloudFormationStackOutput "$DEVOPS_
 # creates the pipeline from our parsed file.
 
 # CREATE INFRASTRUCTURE PIPELINE
-createDevOpsPipeline "lib/devops-account/infrastructure-pipeline/pipeline-definition.json"
+createDevOpsPipeline "lib/devops-account/pipeline-definitions/infrastructure-pipeline/pipeline-definition-template.json"

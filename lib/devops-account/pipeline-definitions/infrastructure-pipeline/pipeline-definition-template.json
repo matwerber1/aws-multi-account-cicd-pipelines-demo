@@ -54,7 +54,7 @@
                    "configuration":{
                       "ActionMode":"CREATE_UPDATE",
                       "Capabilities":"CAPABILITY_NAMED_IAM,CAPABILITY_IAM",
-                      "RoleArn":"$PROD_CLOUDFORMATION_ROLE",
+                      "RoleArn":"$TEST_CLOUDFORMATION_ROLE",
                       "StackName":"$INFRASTRUCTURE_CLOUDFORMATION_STACK_NAME",
                       "TemplatePath":"SourceArtifact::cloudformation.yaml"
                    },
