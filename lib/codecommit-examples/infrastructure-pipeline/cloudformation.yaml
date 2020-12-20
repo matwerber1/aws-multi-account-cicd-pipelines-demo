@@ -1,8 +1,139 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Demo repository used to launch CloudFormation templates
 
-# Simple S3 bucket for demo purposes
+Parameters:
+
+  LatestUbunut18AmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/canonical/ubuntu/server/18.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
+
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-017fda3fe58144bc1
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-02067c58d46b8220d
+
+
+# Simple S3 bucket for demo purposes.
 Resources:
   S3Bucket:
     Type: 'AWS::S3::Bucket'
     Properties: {}
+
+  # See link below to understand how we install the CodeDeploy agent:
+  # https://aws.amazon.com/premiumsupport/knowledge-center/install-codedeploy-agent-cfn-init/
+  WebServerEC2: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: !Ref LatestUbunut18AmiId
+      IamInstanceProfile: !Ref WebServerInstanceProfile
+      InstanceType: t3.medium
+      Tags:
+        - 
+          Key: CodeDeployGroup
+          Value: dev-ops-webserver-demo
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet: 
+            - !Ref WebServerSecurityGroup
+          SubnetId: !Ref PublicSubnet
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - ''
+          - - "#!/bin/bash\n"
+            - 'yum -y update
+
+              '
+            - 'yum -y install cfn-bootstrap
+
+              '
+            - "/opt/aws/bin/cfn-init -v"
+            - " --stack "
+            - Ref: AWS::StackName
+            - " --resource WebServerEC2"
+            - " --region "
+            - Ref: AWS::Region
+            - "\n"
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              ruby: []
+          files:
+            "/home/ec2-user/install":
+              source:
+                !Sub "https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install"
+              mode: '000755'
+          commands:
+            00-install-agent:
+              command: "./install auto"
+              cwd: "/home/ec2-user/"
+            01-cfn-signal:
+              command:
+                Fn::Join:
+                - ''
+                - - "/opt/aws/bin/cfn-signal -e 0 --stack "
+                  - Ref: AWS::StackName
+                  - " --resource WebServerEC2 --region "
+                  - Ref: AWS::Region
+    CreationPolicy:
+      ResourceSignal:
+        Count: '1'
+        Timeout: PT5M
+  
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Allow http to client host
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+          
+  WebServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: !Ref WebServerEc2IamRole
+      Roles: 
+        - !Ref WebServerEc2IamRole
+
+  # By attaching the AmazonEC2RoleforSSM policy to our EC2, we can use
+  # Systems Manager services like Sessions Manager for remote connections.
+  WebServerEc2IamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      Policies:
+        - PolicyName: PermissionToDownloadCodeDeployAgent
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:Get*
+                  - s3:List*
+                Resource:
+                  - !Sub "arn:aws:s3:::aws-codedeploy-${AWS::Region}/*"

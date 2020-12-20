@@ -4,13 +4,13 @@
 # You can check the ~/.aws/config file to view or edit your profile names. Note, 
 # if you change a profile name, you will also need to make the same change to 
 # to ~/.aws/credentials: 
-export DEVOPS_PROFILE="your_devops_profile"
-export TEST_PROFILE="your_test_profile"
-export PROD_PROFILE="your_prod_profile"
+export DEVOPS_PROFILE="ctt-team-1"
+export TEST_PROFILE="ctt-test"
+export PROD_PROFILE="ctt-prod"
 
-export DEVOPS_ACCOUNT_ID="111111111111"
-export TEST_ACCOUNT_ID="222222222222"
-export PROD_ACCOUNT_ID="333333333333"
+export DEVOPS_ACCOUNT_ID="255629334033"
+export TEST_ACCOUNT_ID="723403234461"
+export PROD_ACCOUNT_ID="599253515257"
 
 # These values are used for the devOps resources shared by all of our pipelines:
 export DEVOPS_SHARED_PIPELINE_RESOURCES_STACK_NAME="devops-pipeline-resources"

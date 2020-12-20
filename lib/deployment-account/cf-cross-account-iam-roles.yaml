@@ -48,6 +48,7 @@ Resources:
                   - s3:List*
                   - kms:Decrypt
                   - kms:DescribeKey
+                  - ssm:Get*
                   - cloudformation:*    # CodeDeploy must be able to create/describe stacks... however, what the stack actually can create/modify is dictated by the separate CloudFormationServiceRole
                 Resource: "*"
               - 
