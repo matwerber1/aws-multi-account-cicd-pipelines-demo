@@ -42,6 +42,8 @@ I will eventually work on automating more aspects of the deployment process, bet
 
 ### Infrastructure Pipeline
 
+This pipeline is used for launching CloudFormation stacks in your test and prod account. It expects that you will commit a `cloudformation.yaml` template to the CodeCommit repository's master branch in your DevOps account. This will trigger the pipeline to deploy the template as a new (or updated) stack, as further described below:  
+
 ![](images/infrastructure-pipeline.png)
 
 1. CloudWatch Event triggers CodePipeline when a commit is made to the branch that the Event is configured to watch. 
