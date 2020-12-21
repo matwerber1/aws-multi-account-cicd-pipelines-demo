@@ -56,13 +56,17 @@ This pipeline is used for launching CloudFormation stacks in your test and prod 
 
 5. **The CloudFormation deployment action** specifies the name of the file from the source artifact (e.g. `cloudformation.yaml`), as well as the name of the CloudFormation stack to create. 
 
-6. In order for CodePipeline in the DevOps account to tell CloudFormation in the test account to launch your CloudFormation stack, the pipeline must assume a cross-account IAM role in the Test account. The cross-account role in the test account must have a trust policy allowing the DevOps account to assume it (i.e. `arn:aws:iam::<DevOpsAccountId>:root`), and the CodePipeline service role must have an IAM policy granting `sts:AssumeRole` on the cross-account role in the test account.
+6. In order for CodePipeline in the DevOps account to tell CloudFormation in the test account to launch your CloudFormation stack, the pipeline must assume a cross-account IAM role in the Test account to trigger CloudFormation. The cross-account role in the test account must have a trust policy allowing the DevOps account to assume it (i.e. `arn:aws:iam::<DevOpsAccountId>:root`), and the CodePipeline service role must have an IAM policy granting `sts:AssumeRole` on the cross-account role in the test account.
 
-7. When CodePipeline invokes CloudFormation in the test account, it must also specify an IAM role that gives CloudFormation permissions to create resources. This role exists in the test account and has a trust policy allowing `cloudformation.amazonaws.com` to assume the role. 
+7. Once CodePipeline assumes a role in the deployment account, it invokes CloudFormation. CloudFormation also requires a role (which determines what CloudFormation can/can't do), and so the CodePipeline role in the deployment account must also have the `iam:PassRole` permission to "give" a role to CloudFormation.
 
-8. If the CloudFormation stack is successfully launched in the Test account, the pipeline moves to a manual approval step. You can optionally configure this approval step to send an SNS notification alerting someone that a deployment is pending approval. 
+8. CloudFormation then launches your stack. Status will be reported back to the DevOps pipeline.
 
-9. If manual approval is given, a deployment is made to the prod account in the same way that the test account was deployed.
+9. If the CloudFormation stack is successfully launched in the Test account, the pipeline moves to a manual approval step. You can optionally configure this approval step to send an SNS notification alerting someone that a deployment is pending approval. 
+
+10. If manual approval is given, the pipeline then deploys to the prod account.
+
+11. The prod account deployment works in the same way as the test account deployment.
 
 ### EC2 Website Pipeline
 
