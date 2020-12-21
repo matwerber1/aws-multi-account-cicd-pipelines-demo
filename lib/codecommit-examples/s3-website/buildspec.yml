@@ -1,0 +1,21 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      nodejs: 10
+    commands:
+      - echo "installing angular CLI..."
+      - npm install -g @angular/cli@11.0.4
+  pre_build:
+    commands:
+      - echo "Installing node dependencies..."
+      - npm install
+  build:
+    commands:
+      - echo "Building Angular app..."
+      - ng build --build-optimizer
+
+artifacts:
+  base-directory: "dist/angular-app"
+  files: 
+    - "*"
