@@ -4,9 +4,10 @@ Description: Demo repository used to launch CloudFormation templates
 Parameters:
 
   # An arbitrary name that we use to name some of the resources that get created: 
-  EnvironmentName: devops-demo
+  EnvironmentName:
     Description: An environment name that is prefixed to resource names
     Type: String
+    Default: devops-demo
 
   # This is the S3 bucket in your DevOps account that contains your pipeline artifacts.
   # You will need to change this to match whatever your bucket is: 
