@@ -63,3 +63,11 @@ This pipeline is used for launching CloudFormation stacks in your test and prod 
 8. If the CloudFormation stack is successfully launched in the Test account, the pipeline moves to a manual approval step. You can optionally configure this approval step to send an SNS notification alerting someone that a deployment is pending approval. 
 
 9. If manual approval is given, a deployment is made to the prod account in the same way that the test account was deployed.
+
+### EC2 Website Pipeline
+
+This pipeline deploys a WordPress website to an EC2 instance in the test an prod accounts. In this example, there is no build step as the CodeCommit repository contains static code (HTML, PHP, CSS) to serve the website. The repository also contains a CodeDeploy application specification (`appspec.yml`) that tells the CodeDeploy agent how to actually deploy the app to EC2. In this case, appspec installs dependencies (PHP, MySQL, Apache) and contains scripts that tell the CodeDeploy agent how to start and stop the services upon deployment. 
+
+Again, CodePipeline must assume a cross-account role in the test/prod accounts. This role is needed to tell the CodeDeploy service to initiative a deployment and where to find the deployment artifacts (which are in the CodePipeline artifact bucket in the DevOps account). The CodeDeploy service then tells the CodeDeploy agent on the EC2 to initiate the deployment. Because the deployment artifacts are in the DevOps artifact bucket, this means that the EC2 instance must have an IAM role that allows it to call `s3:GetObject` on the artifact bucket, and the artifact bucket must have an S3 Bucket Policy that allows the test/prod EC2 IAM Role to also make the get requests. The KMS encryption key used to encrypt the artifact bucket in the DevOps account and the EC2 IAM role must have similar two-way permissions.
+
+![](images/)ec2-deploy-pipeline.png)
