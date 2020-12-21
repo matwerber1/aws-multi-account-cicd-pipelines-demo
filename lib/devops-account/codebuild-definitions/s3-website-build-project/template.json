@@ -1,0 +1,38 @@
+{
+    "name": "$DEVOPS_S3_WEBSITE_BUILD_PROJECT_NAME",
+    "description": "",
+    "source": {
+        "type": "CODEPIPELINE",
+        "insecureSsl": true,
+        "sourceIdentifier": "PipelineSource"
+    },
+    "artifacts": {
+        "type": "CODEPIPELINE",
+        "artifactIdentifier": "BuildArtifact"
+    },
+    "cache": {
+        "type": "LOCAL",
+        "modes": [
+            "LOCAL_DOCKER_LAYER_CACHE"
+        ]
+    },
+    "environment": {
+        "type": "LINUX_CONTAINER",
+        "image": "aws/codebuild/amazonlinux2-x86_64-standard:3.0",
+        "computeType": "BUILD_GENERAL1_MEDIUM",
+        "privilegedMode": true,
+        "imagePullCredentialsType": "CODEBUILD"
+    },
+    "serviceRole": "$DEVOPS_CODEBUILD_SERVICE_ROLE_ARN",
+    "timeoutInMinutes": 10,
+    "queuedTimeoutInMinutes": 10,
+    "encryptionKey": "$DEVOPS_PIPELINE_KMS_KEY_ARN",
+    "logsConfig": {
+        "cloudWatchLogs": {
+            "status": "DISABLED"
+        },
+        "s3Logs": {
+            "status": "DISABLED"
+        }
+    }
+}

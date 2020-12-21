@@ -14,7 +14,9 @@ Parameters:
     Type: String
     Default: devops-ec2-webserver
 
-
+  S3WebsiteRepoName:
+    Type: String
+    Default: devops-s3-website
 
 Resources:
   # Repository intended to contain a cloudformation template that our infrastructure
@@ -29,4 +31,10 @@ Resources:
     Type: AWS::CodeCommit::Repository
     Properties:
       RepositoryName: !Ref WebServerRepoName
-      RepositoryDescription: Contains a cloudformation.yaml template defining our app code to run on EC2 webserver.
+      RepositoryDescription: Contains a WordPress site that we deploy to an EC2 via CodeDeploy (demonstrated appsec.yml).
+
+  S3WebsiteRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Ref S3WebsiteRepoName
+      RepositoryDescription: Contains an AngularJS site that we build with CodeBuild then deploy to an S3 website bucket.

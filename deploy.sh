@@ -31,6 +31,17 @@ createDevOpsPipeline() {
         --profile $DEVOPS_PROFILE
 }
 
+# Open the specified codebuild template file, replace variable placeholders with their 
+# actual environment variable value, then create a codebuild project using the parsed template:
+createCodeBuildProject() {
+    local templatePath=${1}
+    local outputFile="$templatePath.parsed.json"
+    envsubst < $templatePath > $outputFile
+    aws codebuild create-project \
+        --cli-input-json file://$outputFile \
+        --profile $DEVOPS_PROFILE
+}
+
 # Create our CodeCommit repositories:
 echo $'\nCreating CodeCommit repositories in DevOps account:'
 aws cloudformation deploy \
@@ -85,9 +96,12 @@ aws cloudformation deploy \
         InfrastructureRepositoryName=$DEVOPS_INFRASTRUCTURE_REPO_NAME \
         InfrastructurePipelineName=$DEVOPS_INFRASTRUCTURE_PIPELINE_NAME \
         WebserverRepositoryName=$DEVOPS_EC2_WEBSERVER_REPO_NAME \
-        WebserverPipelineName=$DEVOPS_EC2_WEBSERVER_PIPELINE_NAME \
+        Ec2WebserverPipelineName=$DEVOPS_EC2_WEBSERVER_PIPELINE_NAME \
+        S3WebsitePipelineName=$DEVOPS_S3_WEBSITE_PIPELINE_NAME \
+        S3WebsiteRepositoryName=$DEVOPS_S3_WEBSITE_REPO_NAME \
         PipelineServiceRoleName=$DEVOPS_PIPELINE_SERVICE_ROLE_NAME \
         PipelineArtifactBucketName=$DEVOPS_CODFEPIPELINE_BUCKET_NAME \
+        CodeBuildServiceRoleName=$DEVOPS_CODEBUILD_SERVICE_ROLE_NAME \
         TestWebServerEC2RoleArn=$TEST_EC2_WEBSERVER_ROLE_ARN \
         ProdWebServerEC2RoleArn=$PROD_EC2_WEBSERVER_ROLE_ARN \
         TestAccountId=$TEST_ACCOUNT_ID \
@@ -98,6 +112,7 @@ aws cloudformation deploy \
 # ARN after it is created in the stack above: 
 export DEVOPS_PIPELINE_KMS_KEY_ARN=$(getCloudFormationStackOutput "$DEVOPS_SHARED_PIPELINE_RESOURCES_STACK_NAME" "PipelineArtifactKmsKeyArn" "$DEVOPS_PROFILE")
 export DEVOPS_PIPELINE_SERVICE_ROLE_ARN=$(getCloudFormationStackOutput "$DEVOPS_SHARED_PIPELINE_RESOURCES_STACK_NAME" "CodePipelineServiceRoleArn" "$DEVOPS_PROFILE")
+export DEVOPS_CODEBUILD_SERVICE_ROLE_ARN=$(getCloudFormationStackOutput "$DEVOPS_SHARED_PIPELINE_RESOURCES_STACK_NAME" "CodeBuildServiceRoleArn" "$DEVOPS_PROFILE")
 
 # These commands create our pipeline in the DevOps account. The first command
 # loads configuration variables, the second command inserts them into our
@@ -106,8 +121,13 @@ export DEVOPS_PIPELINE_SERVICE_ROLE_ARN=$(getCloudFormationStackOutput "$DEVOPS_
 
 # CREATE INFRASTRUCTURE PIPELINE
 echo $'\nCreating pipeline in DevOps account to launch CloudFormation infrastructure in test/prod accounts:'
-createDevOpsPipeline "lib/devops-account/pipeline-definitions/infrastructure-pipeline/pipeline-definition-template.json"
+createDevOpsPipeline "lib/devops-account/pipeline-definitions/infrastructure-pipeline/template.json"
 
 # CREATE WEBSERVER APP PIPELINE
 echo $'\nCreating pipeline in DevOps account to build and launch application to EC2 webserver in test/prod accounts:'
-createDevOpsPipeline "lib/devops-account/pipeline-definitions/ec2-codedeploy-pipeline/pipeline-definition-template.json"
+createDevOpsPipeline "lib/devops-account/pipeline-definitions/ec2-codedeploy-pipeline/template.json"
+
+# Create the CodeBuild project that is used to build our S3 AngularJS website (which is included in our S3-website pipeline):
+createCodeBuildProject "lib/devops-account/codebuild-definitions/s3-website-build-project/template.json"
+
+createDevOpsPipeline "lib/devops-account/pipeline-definitions/s3-website-pipeline/template.json"

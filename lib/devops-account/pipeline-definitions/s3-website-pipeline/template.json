@@ -1,0 +1,80 @@
+{
+    "pipeline":{
+       "name":"$DEVOPS_S3_WEBSITE_PIPELINE_NAME",
+       "roleArn":"$DEVOPS_PIPELINE_SERVICE_ROLE_ARN",
+       "artifactStore":{
+          "type":"S3",
+          "location":"$DEVOPS_CODFEPIPELINE_BUCKET_NAME",
+          "encryptionKey":{
+             "id":"$DEVOPS_PIPELINE_KMS_KEY_ARN",
+             "type":"KMS"
+          }
+       },
+       "stages":[
+          {
+             "name":"Source",
+             "actions":[
+                {
+                   "name":"CodeCommit_Source",
+                   "actionTypeId":{
+                      "category":"Source",
+                      "owner":"AWS",
+                      "provider":"CodeCommit",
+                      "version":"1"
+                   },
+                   "runOrder":1,
+                   "configuration":{
+                      "BranchName":"master",
+                      "PollForSourceChanges":"false",
+                      "RepositoryName":"$DEVOPS_S3_WEBSITE_REPO_NAME"
+                   },
+                   "outputArtifacts":[
+                      {
+                         "name":"SourceArtifact"
+                      }
+                   ],
+                   "inputArtifacts":[
+                      
+                   ]
+                }
+             ]
+          },
+          {
+             "name": "Build",
+             "actions": [
+                {
+                   "name": "CodeBuild_Build",
+                   "actionTypeId":{
+                     "category":"Build",
+                     "owner":"AWS",
+                     "provider":"CodeBuild",
+                     "version":"1"
+                  },
+                  "outputArtifacts":[
+                     {
+                        "name":"BuildArtifact"
+                     }
+                  ],
+                  "inputArtifacts":[
+                     {
+                        "name": "SourceArtifact"
+                     }
+                  ],
+                  "configuration": {
+                     "ProjectName": "$DEVOPS_S3_WEBSITE_BUILD_PROJECT_NAME"
+                  }
+
+                }
+             ]
+
+          }
+       ],
+       "version":1
+    },
+    "tags":[
+       {
+          "key":"CreatedBy",
+          "value":"AWS CLI command"
+       }
+    ]
+ }

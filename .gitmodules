@@ -1,0 +1,3 @@
+[submodule "lib/codecommit-examples/ec2-webserver-app"]
+	path = lib/codecommit-examples/ec2-webserver-app
+	url = codecommit::us-west-2://ctt-team-1@devops-ec2-webserver
