@@ -71,13 +71,6 @@ export TEST_CLOUDFORMATION_ROLE=$(getCloudFormationStackOutput "$CROSS_ACCOUNT_R
 export PROD_CLOUDFORMATION_ROLE=$(getCloudFormationStackOutput "$CROSS_ACCOUNT_RESOURCES_STACK_NAME" "CloudFormationServiceRoleArn" "$PROD_PROFILE")
 
 
-echo ""
-echo $TEST_CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_ARN
-echo $PROD_CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_ARN
-echo $TEST_EC2_WEBSERVER_ROLE_ARN
-echo $PROD_EC2_WEBSERVER_ROLE_ARN
-
-
 echo $'\nCreating shared pipeline resources in DevOps account:'
 aws cloudformation deploy \
     --stack-name $DEVOPS_SHARED_PIPELINE_RESOURCES_STACK_NAME \

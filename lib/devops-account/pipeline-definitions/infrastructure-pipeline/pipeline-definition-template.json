@@ -56,7 +56,8 @@
                       "Capabilities":"CAPABILITY_NAMED_IAM,CAPABILITY_IAM",
                       "RoleArn":"$TEST_CLOUDFORMATION_ROLE",
                       "StackName":"$INFRASTRUCTURE_CLOUDFORMATION_STACK_NAME",
-                      "TemplatePath":"SourceArtifact::cloudformation.yaml"
+                      "TemplatePath":"SourceArtifact::cloudformation.yaml",
+                      "ParameterOverrides": "{\"DevOpsPipelineArtifactBucketName\": \"$DEVOPS_CODFEPIPELINE_BUCKET_NAME\", \"DevOpsPipelineArtifactKmsKeyArn\": \"$DEVOPS_PIPELINE_KMS_KEY_ARN\" }"
                    },
                    "outputArtifacts":[],
                    "inputArtifacts":[
