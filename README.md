@@ -46,22 +46,20 @@ This pipeline is used for launching CloudFormation stacks in your test and prod 
 
 ![](images/infrastructure-pipeline.png)
 
-1. CloudWatch Event triggers CodePipeline when a commit is made to the branch that the Event is configured to watch. 
+1. **CloudWatch Event** triggers CodePipeline in the DevOps account when a commit is made to the master branch of the CodeCommit pipeline. 
 
-2. CodePipeline initially assumes an IAM service role. When you create a pipeline in the console, you will be prompted to create a new role or use an existing role. In our project, we explicitly create this role with an included CloudFormation template. 
+2. **CodePipeline** initially assumes an IAM service role in the DevOps account allowing it to execute each step of the pipeline. This role must have a trust policy for the `codepipeline.amazonaws.com` principle. When you create a pipeline in the console, you will be prompted to create a new role or use an existing role. In our project, we explicitly create this role with an included CloudFormation template. We need to do this because we need to reference this role in the access policies of other resources we create, such as our pipeline artifact S3 bucket. 
 
-3. The CodeCommit "source action" of CodePipeline will read the contents of the CodeCommit repository. To do this, CodePipeline will use the same CodePipeline service role to perform this action (however, if you want, you could instead create an IAM role exclusively for CodeCommit and specify the role in your pipeline configuration.).
+3. **The CodeCommit source action** of CodePipeline will read the contents of the CodeCommit repository. To do this, CodeCommit will use the same role as CodePipeline to perform this action.
 
-4. Whenever input artifacts (like a CodeCommit repo) are pulled into a pipeline, or outputs are generated (e.g. from a CodeBuild project), CodePipeline will automatically store them as a zip file in an "artifact" S3 bucket. This bucket *must* be encrypted using KMS. 
+4. Whenever input artifacts (like a CodeCommit repo) are pulled into a pipeline, or outputs are generated (e.g. from a CodeBuild project), CodePipeline will automatically store them as a zip file in an "artifact" S3 bucket in the DevOps account. This bucket *must* be encrypted using KMS. 
 
-5. The CodeDeploy action specifies the name of the file from the source artifact (e.g. `cloudformation.yaml`), as well as the name of the CloudFormation stack to create. 
+5. **The CloudFormation deployment action** specifies the name of the file from the source artifact (e.g. `cloudformation.yaml`), as well as the name of the CloudFormation stack to create. 
 
-6. In order for CodeDeploy to launch the stack in the Test account instead of the DevOps account, your CodePipeline configuration must specify an IAM role in the Test account for CodeDeploy to assume. Any time a role is assumed, all actions occur as though they are taking place in the parent account of the role.
+6. In order for CodePipeline in the DevOps account to tell CloudFormation in the test account to launch your CloudFormation stack, the pipeline must assume a cross-account IAM role in the Test account. The cross-account role in the test account must have a trust policy allowing the DevOps account to assume it (i.e. `arn:aws:iam::<DevOpsAccountId>:root`), and the CodePipeline service role must have an IAM policy granting `sts:AssumeRole` on the cross-account role in the test account.
 
-7. When CodeDeploy actually invokes CloudFormation in the test account to deploy the new stack, it must also provide CloudFormation with an IAM role that gives CloudFormation permissions to create resources. 
+7. When CodePipeline invokes CloudFormation in the test account, it must also specify an IAM role that gives CloudFormation permissions to create resources. This role exists in the test account and has a trust policy allowing `cloudformation.amazonaws.com` to assume the role. 
 
 8. If the CloudFormation stack is successfully launched in the Test account, the pipeline moves to a manual approval step. You can optionally configure this approval step to send an SNS notification alerting someone that a deployment is pending approval. 
 
-9. If manual approval is given, a deployment is made to the prod account in the same way that the test account was deployed. 
-
-
+9. If manual approval is given, a deployment is made to the prod account in the same way that the test account was deployed.

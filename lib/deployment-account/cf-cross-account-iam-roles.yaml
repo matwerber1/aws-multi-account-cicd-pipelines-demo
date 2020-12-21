@@ -10,20 +10,26 @@ Parameters:
     Type: String
     Default: 111111111111
 
+  # Name of the role in test / prod account that will be assumed by CodePipeline actions
+  # to complete deployment steps:
+  CrossAccountPipelineDeploymentRoleName:
+    Type: String
+    Default: devops-crossaccount-pipeline-deloyment-role
+
 Resources:
 
   # This role will be assumed by CodeDeploy in the DevOps account: 
-  CrossAccountCodeDeployRole:
+  CrossAccountPipelineDeploymentRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: devops-crossaccount-codedeploy-role
+      RoleName: !Ref CrossAccountPipelineDeploymentRoleName
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
           - Effect: Allow
             Principal:
-              Service:
-                - codedeploy.amazonaws.com
+              #Service:
+              #  - codedeploy.amazonaws.com
               AWS:
                 - !Sub "arn:aws:iam::${DevOpsAccountId}:root"
             Action:
@@ -50,6 +56,7 @@ Resources:
                   - kms:DescribeKey
                   - ssm:Get*
                   - cloudformation:*    # CodeDeploy must be able to create/describe stacks... however, what the stack actually can create/modify is dictated by the separate CloudFormationServiceRole
+                  - codedeploy:*
                 Resource: "*"
               - 
                 # The CodeDeploy action must pass the the CloudFormation role to the CloudFormation service: 
@@ -91,8 +98,8 @@ Resources:
                 Resource: "*"
 
 Outputs:
-  CrossAccountCodeDeployRoleArn:
-    Value: !GetAtt CrossAccountCodeDeployRole.Arn
+  CrossAccountPipelineDeploymentRoleArn:
+    Value: !GetAtt CrossAccountPipelineDeploymentRole.Arn
 
   CloudFormationServiceRoleArn:
     Value: !GetAtt CloudFormationServiceRole.Arn

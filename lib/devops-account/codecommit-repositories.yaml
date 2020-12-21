@@ -10,6 +10,12 @@ Parameters:
     Type: String
     Default: devops-demo-infrastructure
 
+  WebServerRepoName:
+    Type: String
+    Default: devops-ec2-webserver
+
+
+
 Resources:
   # Repository intended to contain a cloudformation template that our infrastructure
   # CI/CD pipeline will deploy via the CodeDeploy CloudFormation action type: 
@@ -19,3 +25,8 @@ Resources:
       RepositoryName: !Ref InfrastructureRepoName
       RepositoryDescription: Contains a cloudformation.yaml template defining infrastructure to be deployed.
 
+  WebserverRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Ref WebServerRepoName
+      RepositoryDescription: Contains a cloudformation.yaml template defining our app code to run on EC2 webserver.

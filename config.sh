@@ -20,7 +20,24 @@ export DEVOPS_CODFEPIPELINE_BUCKET_NAME="${DEVOPS_ACCOUNT_ID}-codepipeline-devop
 # Name of the stack that we deploy in test/prod to create cross-account roles:
 export CROSS_ACCOUNT_RESOURCES_STACK_NAME="crossaccount-deployment-roles"
 
+# Name of the role that will be created in test/prod accounts that our pipeline in DevOps
+# assumes to perform cross-account deployment actions: 
+export CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_NAME="devops-crossaccount-pipeline-deloyment-role"
+
 # These values correspond with each of the demo pipelines we will create: 
 export DEVOPS_INFRASTRUCTURE_REPO_NAME="devops-infrastructure"
 export DEVOPS_INFRASTRUCTURE_PIPELINE_NAME="devops-infrastructure-pipeline"
 export INFRASTRUCTURE_CLOUDFORMATION_STACK_NAME="devops-infrastructure-stack"   # This is the stack name that the pipeline will create in the test and prod accounts
+
+export DEVOPS_EC2_WEBSERVER_ROLE_NAME="devops-webserver-ec2-role"
+export DEVOPS_EC2_WEBSERVER_REPO_NAME="devops-ec2-webserver"
+export DEVOPS_EC2_WEBSERVER_PIPELINE_NAME="devops-ec2-webserver-pipeline"
+
+# These need to match the values in the infrastructure cloudformation stack:
+export TEST_WEBSERVER_CODEDEPLOY_APP_NAME="devops-webserver"
+export TEST_WEBSERVER_CODEDEPLOY_DEPLOYMENT_GROUP_NAME="devops-webserver-deploy-group"
+
+
+# The values below are derived from the values above and should not be modified:
+export TEST_EC2_WEBSERVER_ROLE_ARN="arn:aws:iam::$TEST_ACCOUNT_ID:role/$DEVOPS_EC2_WEBSERVER_ROLE_NAME"
+export PROD_EC2_WEBSERVER_ROLE_ARN="arn:aws:iam::$PROD_ACCOUNT_ID:role/$DEVOPS_EC2_WEBSERVER_ROLE_NAME"

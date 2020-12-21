@@ -16,36 +16,65 @@ Parameters:
     Type: String
     Default: devops-infrastructure-pipeline
 
+  WebserverRepositoryName:
+    Type: String
+    Default: devops-ec2-webserver
+
+  # This is the name of the pipeline that we will later create:
+  WebserverPipelineName:
+    Type: String
+    Default: devops-ec2-webserver-pipeline
+
   # This is the branch that will trigger our pipeline:
   CodePipelineBranchName:
     Type: String
     Default: master
 
-  # IAM Role ARN of the CodeDeploy role created in test account that will be assumed by CodePipeline role in DevOps account:
-  TestCrossAccountCodeDeployRoleArn:
+  # IAM Role ARN of the cross-account role created in test account that will be assumed by CodePipeline role in DevOps account:
+  TestCrossAccountPipelineDeploymentRoleArn:
+    Type: String
+    Default: XXXXX
+
+  # IAM Role ARN of the cross-account role created in prod account that will be assumed by CodePipeline role in DevOps account:
+  ProdCrossAccountPipelineDeploymentRoleArn:
     Type: String
     Default: XXXXX
 
   # IAM Role ARN of the CodeDeploy role created in prod account that will be assumed by CodePipeline role in DevOps account:
-  ProdCrossAccountCodeDeployRoleArn:
-    Type: String
-    Default: XXXXX
-
-  # IAM Role ARN of the CodeDeploy role created in prod account that will be assumed by CodePipeline role in DevOps account:
-  TestCrossAccountCloudFormationRoleArn:
-    Type: String
-    Default: XXXXX
+  # TestCrossAccountCloudFormationRoleArn:
+  #   Type: String
+  #   Default: XXXXX
   
   # IAM Role ARN of the CodeDeploy role created in prod account that will be assumed by CodePipeline role in DevOps account:
-  ProdCrossAccountCloudFormationRoleArn:
-    Type: String
-    Default: XXXXX
+  # ProdCrossAccountCloudFormationRoleArn:
+  #   Type: String
+  #   Default: XXXXX
+
+  # IAM Role ARN of the EC2 role attached to web server instance(s) in our test account: 
+  # TestWebServerEC2RoleArn:
+  #   Type: String
+  #   Default: XXXXX
+
+  # IAM Role ARN of the EC2 role attached to web server instance(s) in our prod account: 
+  # ProdWebServerEC2RoleArn:
+  #   Type: String
+  #   Default: XXXXX
 
   PipelineServiceRoleName:
     Type: String
     Default: devops-codepipeline-service-role
 
   PipelineArtifactBucketName:
+    Type: String
+    Default: XXXXXX
+
+  # AWS Account ID of our test account:
+  TestAccountId:
+    Type: String
+    Default: XXXXXX
+
+  # AWS Account ID of our prod account:
+  ProdAccountId:
     Type: String
     Default: XXXXXX
 
@@ -75,15 +104,20 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Action:
+          - 
+            # Allow test/prod accounts to read from this bucket.
+            # Note - you could scope this policy down to specific roles rather than the entire account,
+            # which would be more secure but require more maintenance (i.e. every cross-account role 
+            # that needs to read from the artifact bucket would need to be added).
+            Action:
             - s3:GetObject*
             - s3:GetBucket*
             - s3:List*
             Effect: Allow
             Principal:
               AWS:
-                - !Ref TestCrossAccountCodeDeployRoleArn
-                - !Ref ProdCrossAccountCodeDeployRoleArn
+                - !Sub arn:aws:iam::${TestAccountId}:root
+                - !Sub arn:aws:iam::${ProdAccountId}:root
             Resource:
               - !GetAtt PipelineArtifactBucket.Arn
               - !Sub "${PipelineArtifactBucket.Arn}/*"
@@ -132,15 +166,18 @@ Resources:
               AWS: !GetAtt CodePipelineServiceRole.Arn
             Resource: "*"
           - 
-            # cross-account deployment-related roles in test and prod should only need to decrypt:
+            # Allow test and dev accounts to use this KMS key to decrypt pipeline artifacts. 
+            # Note - you could scope this policy down to specific roles rather than the entire account,
+            # which would be more secure but require more maintenance (i.e. every cross-account role 
+            # that needs to read from the artifact bucket would need to be added).
             Action:
               - kms:Decrypt
               - kms:DescribeKey
             Effect: Allow
             Principal:
               AWS:
-                - !Ref TestCrossAccountCodeDeployRoleArn
-                - !Ref ProdCrossAccountCodeDeployRoleArn
+                - !Sub arn:aws:iam::${TestAccountId}:root
+                - !Sub arn:aws:iam::${ProdAccountId}:root
             Resource: "*"
 
           
@@ -186,12 +223,12 @@ Resources:
             Resource: 
               - !GetAtt PipelineArtifactKmsKey.Arn
           -
-            # Give DevOps pipeline service role permission to assume CodeDeploy roles in our test and prod accounts:
+            # Give DevOps pipeline service role permission to assume cross-account deployment roles in our test and prod accounts:
             Effect: "Allow"
             Action: "sts:AssumeRole"
             Resource: 
-              - !Ref TestCrossAccountCodeDeployRoleArn
-              - !Ref ProdCrossAccountCodeDeployRoleArn
+              - !Ref TestCrossAccountPipelineDeploymentRoleArn
+              - !Ref ProdCrossAccountPipelineDeploymentRoleArn
           - 
             # This allows CodePipeline to pass IAM roles to downstream services to complete pipeline actions. The
             # conditon key ensures we are only passing to proper downstream services:
@@ -368,6 +405,7 @@ Resources:
                 Action: codepipeline:StartPipelineExecution
                 Resource: 
                   - !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref InfrastructurePipelineName ] ]         
+                  - !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref WebserverPipelineName ] ]         
 
   # This CloudWatch Event triggers our pipeline upon a push to the specified branch: 
   InfrastructurePipelineEventTrigger:
@@ -394,6 +432,31 @@ Resources:
             !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref InfrastructurePipelineName ] ]
           RoleArn: !GetAtt AmazonCloudWatchEventRole.Arn
           Id: !Sub "codepipeline-${InfrastructureRepositoryName}"
+  
+  WebserverPipelineEventTrigger:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - 'CodeCommit Repository State Change'
+        resources:
+          - !Join [ '', [ 'arn:aws:codecommit:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref WebserverRepositoryName ] ]
+        detail:
+          event:
+            - referenceCreated
+            - referenceUpdated
+          referenceType:
+            - branch
+          referenceName:
+            - !Ref CodePipelineBranchName
+      Targets:
+        -
+          Arn: 
+            !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref WebserverPipelineName ] ]
+          RoleArn: !GetAtt AmazonCloudWatchEventRole.Arn
+          Id: !Sub "codepipeline-${WebserverRepositoryName}"
 
 Outputs:
   

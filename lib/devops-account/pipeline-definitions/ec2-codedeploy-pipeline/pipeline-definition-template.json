@@ -1,6 +1,6 @@
 {
     "pipeline":{
-       "name":"$DEVOPS_INFRASTRUCTURE_PIPELINE_NAME",
+       "name":"$DEVOPS_EC2_WEBSERVER_PIPELINE_NAME",
        "roleArn":"$DEVOPS_PIPELINE_SERVICE_ROLE_ARN",
        "artifactStore":{
           "type":"S3",
@@ -26,7 +26,7 @@
                    "configuration":{
                       "BranchName":"master",
                       "PollForSourceChanges":"false",
-                      "RepositoryName":"$DEVOPS_INFRASTRUCTURE_REPO_NAME"
+                      "RepositoryName":"$DEVOPS_EC2_WEBSERVER_REPO_NAME"
                    },
                    "outputArtifacts":[
                       {
@@ -47,16 +47,13 @@
                    "actionTypeId":{
                       "category":"Deploy",
                       "owner":"AWS",
-                      "provider":"CloudFormation",
+                      "provider":"CodeDeploy",
                       "version":"1"
                    },
                    "runOrder":1,
                    "configuration":{
-                      "ActionMode":"CREATE_UPDATE",
-                      "Capabilities":"CAPABILITY_NAMED_IAM,CAPABILITY_IAM",
-                      "RoleArn":"$TEST_CLOUDFORMATION_ROLE",
-                      "StackName":"$INFRASTRUCTURE_CLOUDFORMATION_STACK_NAME",
-                      "TemplatePath":"SourceArtifact::cloudformation.yaml"
+                      "ApplicationName": "$TEST_WEBSERVER_CODEDEPLOY_APP_NAME",
+                      "DeploymentGroupName": "$TEST_WEBSERVER_CODEDEPLOY_DEPLOYMENT_GROUP_NAME"
                    },
                    "outputArtifacts":[],
                    "inputArtifacts":[
@@ -65,41 +62,7 @@
                       }
                    ],
                    "roleArn":"$TEST_CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_ARN"
-                },
-                {
-                   "name":"Approval",
-                   "actionTypeId":{
-                      "category":"Approval",
-                      "owner":"AWS",
-                      "provider":"Manual",
-                      "version":"1"
-                   },
-                   "runOrder":2
-                },
-                {
-                    "name":"Deploy_to_Prod",
-                    "actionTypeId":{
-                       "category":"Deploy",
-                       "owner":"AWS",
-                       "provider":"CloudFormation",
-                       "version":"1"
-                    },
-                    "runOrder":3,
-                    "configuration":{
-                       "ActionMode":"CREATE_UPDATE",
-                       "Capabilities":"CAPABILITY_NAMED_IAM,CAPABILITY_IAM",
-                       "RoleArn":"$PROD_CLOUDFORMATION_ROLE",
-                       "StackName":"$INFRASTRUCTURE_CLOUDFORMATION_STACK_NAME",
-                       "TemplatePath":"SourceArtifact::cloudformation.yaml"
-                    },
-                    "outputArtifacts":[],
-                    "inputArtifacts":[
-                       {
-                          "name":"SourceArtifact"
-                       }
-                    ],
-                    "roleArn":"$PROD_CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_ARN"
-                 }
+                }
              ]
           }
        ],
