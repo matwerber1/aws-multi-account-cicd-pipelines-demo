@@ -81,3 +81,9 @@ This pipeline deploys a WordPress website to an EC2 instance in the test an prod
 Again, CodePipeline must assume a cross-account role in the test/prod accounts. This role is needed to tell the CodeDeploy service to initiative a deployment and where to find the deployment artifacts (which are in the CodePipeline artifact bucket in the DevOps account). The CodeDeploy service then tells the CodeDeploy agent on the EC2 to initiate the deployment. Because the deployment artifacts are in the DevOps artifact bucket, this means that the EC2 instance must have an IAM role that allows it to call `s3:GetObject` on the artifact bucket, and the artifact bucket must have an S3 Bucket Policy that allows the test/prod EC2 IAM Role to also make the get requests. The KMS encryption key used to encrypt the artifact bucket in the DevOps account and the EC2 IAM role must have similar two-way permissions.
 
 ![](images/ec2-deploy-pipeline.png)
+
+### S3 Website Pipeline
+
+In this pipeline, the DevOps CodeCommit repository contains source code for an AngularJS website. The pipeline first passes the source code to CodeBuild, and CodeBuild executes commands (e.g. `npm install` and `npm run build`) in the `buildspec.yml` file to build the project. CodeBuild stores the build output in the DevOps pipeline artifact bucket, and the S3 Deploy Action unzips and copies the build artifact to an S3 website bucket in the test and prod accounts. 
+
+![](images/s3-website-pipeline.png)
