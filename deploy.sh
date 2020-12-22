@@ -124,11 +124,10 @@ export DEVOPS_CODEBUILD_SERVICE_ROLE_ARN=$(getCloudFormationStackOutput "$DEVOPS
 echo $'\nCreating pipeline in DevOps account to launch CloudFormation infrastructure in test/prod accounts:'
 createDevOpsPipeline "lib/devops-account/pipeline-definitions/infrastructure-pipeline/template.json"
 
-# CREATE WEBSERVER APP PIPELINE
+# CREATE EC2 WEB SERVER PIPELINE
 echo $'\nCreating pipeline in DevOps account to build and launch application to EC2 webserver in test/prod accounts:'
 createDevOpsPipeline "lib/devops-account/pipeline-definitions/ec2-codedeploy-pipeline/template.json"
 
-# Create the CodeBuild project that is used to build our S3 AngularJS website (which is included in our S3-website pipeline):
+# CREATE S3 WEBSITE PIPELINE
 createCodeBuildProject "lib/devops-account/codebuild-definitions/s3-website-build-project/template.json"
-
 createDevOpsPipeline "lib/devops-account/pipeline-definitions/s3-website-pipeline/template.json"
