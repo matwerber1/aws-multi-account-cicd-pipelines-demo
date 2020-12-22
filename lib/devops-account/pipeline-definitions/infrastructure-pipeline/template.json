@@ -57,7 +57,7 @@
                       "RoleArn":"$TEST_CLOUDFORMATION_ROLE",
                       "StackName":"$INFRASTRUCTURE_CLOUDFORMATION_STACK_NAME",
                       "TemplatePath":"SourceArtifact::cloudformation.yaml",
-                      "ParameterOverrides": "{\"DevOpsPipelineArtifactBucketName\": \"$DEVOPS_CODFEPIPELINE_BUCKET_NAME\", \"DevOpsPipelineArtifactKmsKeyArn\": \"$DEVOPS_PIPELINE_KMS_KEY_ARN\", \"WebsiteBucketNameSuffix\": \"test\" }"
+                      "ParameterOverrides": "{\"DevOpsPipelineArtifactBucketName\": \"$DEVOPS_CODFEPIPELINE_BUCKET_NAME\", \"DevOpsPipelineArtifactKmsKeyArn\": \"$DEVOPS_PIPELINE_KMS_KEY_ARN\", \"WebsiteBucketName\": \"$TEST_WEBSITE_BUCKET_NAME\" }"
                    },
                    "outputArtifacts":[],
                    "inputArtifacts":[
@@ -92,7 +92,7 @@
                        "RoleArn":"$PROD_CLOUDFORMATION_ROLE",
                        "StackName":"$INFRASTRUCTURE_CLOUDFORMATION_STACK_NAME",
                        "TemplatePath":"SourceArtifact::cloudformation.yaml",
-                       "ParameterOverrides": "{\"DevOpsPipelineArtifactBucketName\": \"$DEVOPS_CODFEPIPELINE_BUCKET_NAME\", \"DevOpsPipelineArtifactKmsKeyArn\": \"$DEVOPS_PIPELINE_KMS_KEY_ARN\", \"WebsiteBucketNameSuffix\": \"prod\" }"
+                       "ParameterOverrides": "{\"DevOpsPipelineArtifactBucketName\": \"$DEVOPS_CODFEPIPELINE_BUCKET_NAME\", \"DevOpsPipelineArtifactKmsKeyArn\": \"$DEVOPS_PIPELINE_KMS_KEY_ARN\", \"WebsiteBucketName\": \"$PROD_WEBSITE_BUCKET_NAME\" }"
                     },
                     "outputArtifacts":[],
                     "inputArtifacts":[

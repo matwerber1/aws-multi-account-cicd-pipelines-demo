@@ -52,7 +52,6 @@ aws cloudformation deploy \
         InfrastructureRepoName=$DEVOPS_INFRASTRUCTURE_REPO_NAME \
         WebServerRepoName=$DEVOPS_EC2_WEBSERVER_REPO_NAME
 
-
 # Launch cross-account roles in TEST account:
 echo $'\nCreating cross-account role (and other deployment resources) in test account:'
 aws cloudformation deploy \
@@ -62,7 +61,8 @@ aws cloudformation deploy \
     --profile $TEST_PROFILE \
     --parameter-overrides \
         DevOpsAccountId=$DEVOPS_ACCOUNT_ID \
-        CrossAccountPipelineDeploymentRoleName=$CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_NAME
+        CrossAccountPipelineDeploymentRoleName=$CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_NAME \
+        WebsiteBucketArn=$TEST_WEBSITE_BUCKET_ARN
 
 # Launch cross-account roles in PROD account:
 echo $'\nCreating cross-account role (and other deployment resources) in prod account:'
@@ -73,7 +73,8 @@ aws cloudformation deploy \
     --profile $PROD_PROFILE \
     --parameter-overrides \
         DevOpsAccountId=$DEVOPS_ACCOUNT_ID \
-        CrossAccountPipelineDeploymentRoleName=$CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_NAME
+        CrossAccountPipelineDeploymentRoleName=$CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_NAME \
+        WebsiteBucketArn=$PROD_WEBSITE_BUCKET_ARN
 
 # Retrieve resource names created above that we can use as inputs into downstream steps:
 export TEST_CROSS_ACCOUNT_PIPELINE_DEPLOYMENT_ROLE_ARN=$(getCloudFormationStackOutput "$CROSS_ACCOUNT_RESOURCES_STACK_NAME" "CrossAccountPipelineDeploymentRoleArn" "$TEST_PROFILE")

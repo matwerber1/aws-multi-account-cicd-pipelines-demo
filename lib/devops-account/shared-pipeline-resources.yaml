@@ -143,8 +143,7 @@ Resources:
     Type: AWS::KMS::Key
     Properties:
       KeyPolicy:
-        Statement:
-          
+        Statement:  
           - 
             # Administrative permissions for the root user of the devOps account (required): 
             Action:
@@ -582,6 +581,13 @@ Resources:
               - s3:GetBucketAcl
               - s3:GetBucketLocation
             Resource: "*"
+
+  CodeBuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: "/aws/codebuild/devops-s3-website"
+      RetentionInDays: 7
+      
 Outputs:
   
   PipelineArtifactBucketArn:

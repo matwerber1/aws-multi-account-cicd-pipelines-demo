@@ -36,7 +36,13 @@ I will eventually work on automating more aspects of the deployment process, bet
 
 1. Run `./deploy.sh`. This single script will create empty CodeCommit repositories attached to their own CI/CD pipelines in the DevOps account, as well as cross-account IAM roles in the test and prod account needed for deployment.
 
-1. The `lib/codecommit-examples` directory contains a folder with source code for each of the demo CI/CD pipelines. Push the code from each folder to its respective CodeCommit repository in your DevOps account and watch as the CI/CD pipeline triggers. 
+1. The `lib/codecommit-examples` directory contains a folder with source code for each of the demo CI/CD pipelines. Push the code from each folder to its respective CodeCommit repository in your DevOps account and watch as the CI/CD pipeline triggers. You should push to each repository in the following order: 
+
+    * First, commit the contents of the **infrastructure** folder to the **devops-infrastructure** CodeCommit repository and wait for the **devops-infrastructure-pipeline** to complete its deployment to your test account. Optionally, approve deployment to production. 
+
+    * Next, commit the contents of the **ec2-webserver-app** folder to the **devops-ec2-webserver** repository and again wait/approve the **devops-ec2-webserver-pipeline**. 
+
+    * Finally, commit the contents of the **s3-website** folder to the **devops-s3-website** repository and wait/approve the **devops-s3-website** pipeline. 
 
 ## Diagrams & Examples
 

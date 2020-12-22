@@ -29,7 +29,8 @@
     "encryptionKey": "$DEVOPS_PIPELINE_KMS_KEY_ARN",
     "logsConfig": {
         "cloudWatchLogs": {
-            "status": "DISABLED"
+            "status": "ENABLED",
+            "groupName": "/aws/codebuild/devops-s3-website"
         },
         "s3Logs": {
             "status": "DISABLED"

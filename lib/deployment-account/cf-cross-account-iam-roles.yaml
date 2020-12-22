@@ -15,6 +15,10 @@ Parameters:
   CrossAccountPipelineDeploymentRoleName:
     Type: String
     Default: devops-crossaccount-pipeline-deloyment-role
+  
+  WebsiteBucketArn:
+    Type: String
+    Default: XXXXXX
 
 Resources:
 
@@ -36,7 +40,7 @@ Resources:
               - 'sts:AssumeRole'
       Path: /
       Policies:
-        - PolicyName: CodeDeployPolicy
+        - PolicyName: CodePipelinePolicy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -58,6 +62,14 @@ Resources:
                   - cloudformation:*    # CodeDeploy must be able to create/describe stacks... however, what the stack actually can create/modify is dictated by the separate CloudFormationServiceRole
                   - codedeploy:*
                 Resource: "*"
+              -
+                Effect: Allow
+                Action: 
+                  - s3:PutObject
+                  - s3:CopyObject
+                Resource: 
+                  - !Ref WebsiteBucketArn
+                  - !Sub "${WebsiteBucketArn}/*"
               - 
                 # The CodeDeploy action must pass the the CloudFormation role to the CloudFormation service: 
                 Effect: Allow
