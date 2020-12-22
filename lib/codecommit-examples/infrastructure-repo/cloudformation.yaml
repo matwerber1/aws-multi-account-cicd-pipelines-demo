@@ -1,0 +1,527 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Demo repository used to launch CloudFormation templates
+
+Parameters:
+
+  # Since we use the same template for both prod and test accounts, we need
+  # to add a suffix to our bucket name to ensure we don't try to launch
+  # two buckets with the same name (since they must be globally unique names):
+  WebsiteBucketName:
+    Type: String
+    Default: BUCKET
+
+  # An arbitrary name that we use to name some of the resources that get created: 
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+    Default: devops-demo
+
+  # This is the S3 bucket in your DevOps account that contains your pipeline artifacts.
+  # You will need to change this to match whatever your bucket is: 
+  DevOpsPipelineArtifactBucketName:
+    Type: String
+    Default: YOUR_DEVOPS_ACCOUNT_ID-codepipeline-devops-artifacts
+
+  # in order to actually use the objects from the pipeline bucket, we also need access
+  # to the KMS key in the DevOps account used to encrypt the bucket: 
+  DevOpsPipelineArtifactKmsKeyArn:
+    Type: String
+    Default: arn:aws:kms:us-west-2:YOUR_DEVOPS_ACCOUNT_ID:key/YOUR_KEY_ID
+
+  LatestUbunut18AmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/canonical/ubuntu/server/18.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
+
+  WebServerEC2RoleName:
+    Type: String
+    Default: devops-webserver-ec2-role
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.10.0/24
+
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.11.0/24
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.20.0/24
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.21.0/24
+
+# Simple S3 bucket for demo purposes.
+Resources:
+
+  # See link below to understand how we install the CodeDeploy agent:
+  # https://github.com/awslabs/aws-cloudformation-templates/blob/master/aws/solutions/HelperNonAmaznAmi/ubuntu16.04LTS_cfn-hup.template
+  # https://aws.amazon.com/premiumsupport/knowledge-center/install-cloudformation-scripts/
+  # https://aws.amazon.com/premiumsupport/knowledge-center/codedeploy-agent-launch-configuration/
+  WebServerEC2: 
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Count: '1'
+        Timeout: PT5M
+    Properties: 
+      ImageId: !Ref LatestUbunut18AmiId
+      IamInstanceProfile: !Ref WebServerInstanceProfile
+      InstanceType: t3.medium
+      Tags:
+        - 
+          Key: Name
+          Value: devops-webserver
+        - 
+          Key: CodeDeployGroup
+          Value: dev-ops-webserver-demo
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet: 
+            - !Ref WebServerSecurityGroup
+          SubnetId: !Ref PublicSubnet1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          
+          # Log output to files, if needed:
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+          # SETUP CFN-INIT
+          #---------------------------
+          apt-get update -y
+          apt-get install -y python-setuptools
+          mkdir -p /opt/aws/bin
+          wget https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          python -m easy_install --script-dir /opt/aws/bin aws-cfn-bootstrap-latest.tar.gz
+
+          # Run the CFN-INIT scripts defined in metadata...
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+            --resource WebServerEC2 \
+            --configsets full_install \
+            --region ${AWS::Region} \
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          full_install:
+            - install_and_enable_cfn_hup
+            - install_codedeploy_agent
+        install_and_enable_cfn_hup:
+          files:
+            "/etc/cfn/cfn-hup.conf":
+              mode: '000400'
+              owner: root
+              group: root
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region
+
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.WebServerEC2.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v \
+                  --stack ${AWS::StackName} \
+                  --resource WebServerEC2 \
+                  --configsets full_install \
+                  --region ${AWS::Region}
+                runas=root
+
+            "/lib/systemd/system/cfn-hup.service":
+              content: !Sub |
+                [Unit]
+                Description=cfn-hup daemon
+
+                [Service]
+                Type=simple
+                ExecStart=/opt/aws/bin/cfn-hup
+                Restart=always
+
+                [Install]
+                WantedBy=multi-user.target
+          commands:
+            01enable_cfn_hup:
+              command: systemctl enable cfn-hup.service
+            02start_cfn_hup:
+              command: systemctl start cfn-hup.service
+        install_codedeploy_agent:
+          commands:
+            00-install-agent:
+              command: "./codedeploy-install-script.sh"
+              cwd: "/home/ubuntu/"
+            01-cfn-signal:
+              command: !Sub "/opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource WebServerEC2 --region ${AWS::Region}"
+          files:
+            "/home/ubuntu/codedeploy-install-script.sh":
+              mode: "000755"
+              content: !Sub |   
+                #!/bin/bash -xe
+                             
+                # Automatically update the CodeDeploy agent:
+                AUTOUPDATE=true
+                
+                # Install dependencies for CodeDeploy/install process:
+                apt-get -y update
+                apt-get -y install jq awscli ruby2.0 || apt-get -y install jq awscli ruby
+
+                function execute(){
+
+                  cd /tmp/
+                  wget https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install
+                  chmod +x ./install
+
+                  if ./install auto; then
+                    echo "Instalation completed"
+                      if ! ${!AUTOUPDATE}; then
+                        echo "Disabling Auto Update"
+                        sed -i '/@reboot/d' /etc/cron.d/codedeploy-agent-update
+                        chattr +i /etc/cron.d/codedeploy-agent-update
+                        rm -f /tmp/install
+                      fi
+                    exit 0
+                  else
+                    echo "Instalation script failed, please investigate"
+                    rm -f /tmp/install
+                    exit 1
+                  fi
+                }
+                execute
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Allow http to client host
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+          
+  WebServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: !Ref WebServerEc2IamRole
+      Roles: 
+        - !Ref WebServerEc2IamRole
+
+  # By attaching the AmazonEC2RoleforSSM policy to our EC2, we can use
+  # Systems Manager services like Sessions Manager for remote connections.
+  WebServerEc2IamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Ref WebServerEC2RoleName
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      Policies:
+        - PolicyName: PermissionToDownloadCodeDeployAgent
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - 
+                Effect: Allow
+                Action:
+                  - s3:Get*
+                  - s3:List*
+                Resource:
+                  # This is an AWS-managed bucket that contains the CodeDeploy agent, which
+                  # we download when the instance is launched:
+                  - !Sub "arn:aws:s3:::aws-codedeploy-${AWS::Region}/*"
+              - 
+                Effect: Allow
+                Action:
+                  - s3:Get*
+                  - s3:List*
+                Resource:
+                  - !Sub "arn:aws:s3:::${DevOpsPipelineArtifactBucketName}"
+                  - !Sub "arn:aws:s3:::${DevOpsPipelineArtifactBucketName}/*"
+              - 
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource:
+                  - !Ref DevOpsPipelineArtifactKmsKeyArn
+
+  CodeDeployApp:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: devops-webserver
+      ComputePlatform: Server
+
+  # This determines which EC2 instances are updated when we push an update
+  # to our CodeDeploy application. In this case, we identify targets by their
+  # instance tags: 
+  DeploymentGroup: 
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties: 
+      DeploymentGroupName: devops-webserver-deploy-group
+      ApplicationName: !Ref CodeDeployApp
+      Ec2TagFilters: 
+        - 
+          Key: CodeDeployGroup
+          Value: dev-ops-webserver-demo
+          Type: "KEY_AND_VALUE"
+      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+
+  # This role is assumed by CodeDeploy for our Code Deployment Group. This is not
+  # to be confused with the cross-account codedeploy role we separately created in
+  # our pipeline stacks which is assumed by CodeDeploy by our CI/CD pipeline in
+  # in the DevOps account:
+  CodeDeployServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: devops-codedeploy-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - codedeploy.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+      Policies:
+        - PolicyName: AutoScalingLaunchPermissions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  # If you create your Auto Scaling group with a launch template, you must add the following permissions:
+                  # https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-service-role.html
+                  - ec2:RunInstances
+                  - ec2:CreateTags
+                  - iam:PassRole
+                Resource:
+                  - "*"
+  
+  #####
+  # Create a new VPC with two public and private subnets, two NAT Gateways: 
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Routes (AZ1)
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Routes (AZ2)
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  NoIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "no-ingress-sg"
+      GroupDescription: "Security group with no ingress rule"
+      VpcId: !Ref VPC
+
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref WebsiteBucketName
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+    DeletionPolicy: Delete
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref WebsiteBucket
+                - /*
+      Bucket: !Ref WebsiteBucket
